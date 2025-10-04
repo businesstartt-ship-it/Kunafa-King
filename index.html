@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Velvet Cocoa Co. - Artisan Chocolate</title>
+    <title>CoCo Crust - Artisan Chocolate Bars & Truffles</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
@@ -22,15 +22,33 @@
 
         let db, auth;
         let userId = null;
-        let cartItems = {}; // Local cache for cart items { productId: { name, price, quantity, total } }
+        // Local cache for cart items { productId: { name, price, quantity, total } }
+        let cartItems = {}; 
 
-        // --- CORE PRODUCT DATA ---
+        // --- CORE PRODUCT DATA (EXPANDED FOR CHOCOLATE CATEGORIES) ---
+        // Price is stored as an integer (BDT value)
         const PRODUCTS = {
-            'dark-roast': { id: 'dark-roast', name: 'The Dark Roast (85%)', price: 12.00, emoji: '🖤' },
-            'sea-salt': { id: 'sea-salt', name: 'Sea Salt Caramel', price: 11.50, emoji: '🍬' },
-            'raspberry': { id: 'raspberry', name: 'Raspberry Delight', price: 13.50, emoji: '🍓' },
-            'tasters-box': { id: 'tasters-box', name: "The Taster's Box", price: 35.00, emoji: '🎁' }
+            'dark-70': { id: 'dark-70', name: '70% Dark Chocolate Bar', price: 750, emoji: '🍫', category: 'dark' },
+            'spicy-chili': { id: 'spicy-chili', name: "Spicy Chili Chocolate Bar", price: 800, emoji: '🌶️', category: 'dark' },
+            'dark-90': { id: 'dark-90', name: '90% Midnight Dark Bar', price: 1050, emoji: '🌑', category: 'dark' },
+            
+            'milk-hazel': { id: 'milk-hazel', name: 'Creamy Milk & Hazelnut Bar', price: 700, emoji: '🥛', category: 'milk' },
+            'vegan-oat': { id: 'vegan-oat', name: 'Oat Milk Vegan Chocolate Bar', price: 950, emoji: '🌾', category: 'milk' },
+
+            'matcha-white': { id: 'matcha-white', name: 'Matcha White Chocolate Bar', price: 890, emoji: '🍵', category: 'white' },
+            'white-berry': { id: 'white-berry', name: 'Raspberry White Chocolate Bar', price: 920, emoji: '🍓', category: 'white' },
+            
+            'sea-salt-caramel': { id: 'sea-salt-caramel', name: 'Sea Salt Caramel Truffles (6pc)', price: 1200, emoji: '⚜️', category: 'truffles' },
+            'assorted-truffles': { id: 'assorted-truffles', name: 'Assorted Luxury Truffle Box (12pc)', price: 2100, emoji: '💎', category: 'truffles' },
+
+            'cocoa-powder': { id: 'cocoa-powder', name: "Dutch Cocoa Powder (200g)", price: 620, emoji: '☕', category: 'other' },
+            'hazelnut-spread': { id: 'hazelnut-spread', name: "Artisan Hazelnut Spread", price: 990, emoji: '🌰', category: 'other' },
+            'dark-espresso': { id: 'dark-espresso', name: 'Dark Chocolate Espresso Beans (150g)', price: 780, emoji: '☕', category: 'other' },
         };
+
+        // --- HELPER FUNCTION FOR CURRENCY FORMATTING ---
+        const formatBDT = (amount) => `৳${amount.toLocaleString('en-IN')}`;
+
 
         // --- FIREBASE INITIALIZATION & AUTHENTICATION ---
         async function initializeFirebase() {
@@ -39,24 +57,18 @@
                 db = getFirestore(app);
                 auth = getAuth(app);
 
-                // Authenticate the user
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
                     await signInAnonymously(auth);
                 }
 
-                // Wait for auth state change to get the userId
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
                         console.log("User authenticated. UID:", userId);
-                        // Start listening for cart changes
                         setupCartListener(userId);
                     } else {
-                        // This should ideally not happen if anonymous sign-in is successful
-                        console.error("Authentication failed or user logged out.");
-                        // Fallback to random ID if no user is authenticated (less secure but handles no-auth case)
                         userId = crypto.randomUUID();
                         setupCartListener(userId);
                     }
@@ -72,7 +84,6 @@
         }
         
         // --- FIRESTORE UTILITIES ---
-        // FIX APPLIED: Path changed from 'cart/items' to 'cart-items' to fix the 'Invalid collection reference' error (segment count must be odd).
         const getCartItemRef = (productId) => doc(db, `artifacts/${appId}/users/${userId}/cart-items`, productId);
         const getCartCollectionRef = () => collection(db, `artifacts/${appId}/users/${userId}/cart-items`);
 
@@ -92,21 +103,19 @@
                     }
                 });
                 updateCartUI();
-                console.log("Cart updated from Firestore:", cartItems);
             }, (error) => {
                 console.error("Error listening to cart changes:", error);
             });
         }
 
-        // --- CART ACTIONS ---
+        // --- CART ACTIONS (addToCart, updateQuantity, checkoutCart unchanged) ---
 
-        async function addToCart(element) {
+        async function addToCart(productId) {
             if (!userId) {
                 console.warn("User ID not ready. Cannot add to cart.");
                 return;
             }
 
-            const productId = element.getAttribute('data-product-id');
             const product = PRODUCTS[productId];
             if (!product) return;
 
@@ -115,12 +124,10 @@
 
             try {
                 if (currentItem) {
-                    // Item exists, update quantity
                     await updateDoc(itemRef, {
                         quantity: increment(1)
                     });
                 } else {
-                    // Item does not exist, create new document
                     await setDoc(itemRef, {
                         name: product.name,
                         price: product.price,
@@ -128,15 +135,13 @@
                         quantity: 1
                     });
                 }
-                showTemporalMessage(`${product.name} added to cart!`, 'bg-green-500');
+                showTemporalMessage(`${product.name} added to basket!`, 'bg-accent');
 
             } catch (e) {
                 console.error("Error adding document to cart: ", e);
                 showTemporalMessage("Could not add item to cart.", 'bg-red-500');
             }
         }
-
-        window.addToCart = addToCart; // Expose to global scope for HTML onclick
 
         async function updateQuantity(productId, change) {
             if (!userId) return;
@@ -149,11 +154,9 @@
                 const newQuantity = currentItem.quantity + change;
 
                 if (newQuantity <= 0) {
-                    // If quantity is zero or less, delete the document
                     await deleteDoc(itemRef);
-                    showTemporalMessage(`${currentItem.name} removed from cart.`, 'bg-red-500');
+                    showTemporalMessage(`${currentItem.name} removed from cart.`, 'bg-primary-light');
                 } else {
-                    // Update the quantity
                     await updateDoc(itemRef, {
                         quantity: newQuantity
                     });
@@ -163,19 +166,14 @@
                 showTemporalMessage("Could not update item quantity.", 'bg-red-500');
             }
         }
-        
-        window.updateQuantity = updateQuantity; // Expose for use in cart modal
 
         async function checkoutCart() {
             if (!userId || Object.keys(cartItems).length === 0) {
-                showTemporalMessage("Your cart is empty!", 'bg-yellow-500');
+                showTemporalMessage("Your cart is delightfully empty!", 'bg-accent');
                 return;
             }
 
-            // Simple checkout: delete all items in the cart
             const batch = writeBatch(db);
-            const productNames = Object.values(cartItems).map(item => item.name).join(', ');
-
             Object.keys(cartItems).forEach(productId => {
                 const itemRef = getCartItemRef(productId);
                 batch.delete(itemRef);
@@ -183,67 +181,12 @@
 
             try {
                 await batch.commit();
-                // Close modal and show success message
                 toggleCartModal(false);
-                showTemporalMessage(`Checkout successful! You ordered: ${productNames}`, 'bg-indigo-600');
+                showTemporalMessage(`Order placed! Your premium chocolate is on its way.`, 'bg-primary');
             } catch (e) {
                 console.error("Error during checkout: ", e);
                 showTemporalMessage("Checkout failed. Please try again.", 'bg-red-500');
             }
-        }
-        
-        window.checkoutCart = checkoutCart;
-
-        // --- UI RENDERING & UTILITIES ---
-
-        function updateCartUI() {
-            const cartContent = document.getElementById('cart-content');
-            const cartTotalElement = document.getElementById('cart-total');
-            const cartCountElement = document.getElementById('cart-count');
-            const cartModalEmpty = document.getElementById('cart-modal-empty');
-            
-            const itemArray = Object.values(cartItems);
-            const totalItems = itemArray.reduce((sum, item) => sum + item.quantity, 0);
-            const totalCost = itemArray.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-            
-            // Update header count
-            cartCountElement.textContent = `Cart (${totalItems})`;
-
-            // Update modal content
-            cartContent.innerHTML = '';
-            if (itemArray.length === 0) {
-                cartModalEmpty.classList.remove('hidden');
-                document.getElementById('cart-modal-footer').classList.add('hidden');
-            } else {
-                cartModalEmpty.classList.add('hidden');
-                document.getElementById('cart-modal-footer').classList.remove('hidden');
-
-                itemArray.forEach(item => {
-                    const itemTotal = (item.price * item.quantity).toFixed(2);
-                    cartContent.innerHTML += `
-                        <div class="flex items-center justify-between border-b border-gray-100 py-3">
-                            <div class="flex items-center space-x-3">
-                                <span class="text-2xl">${item.emoji}</span>
-                                <div>
-                                    <p class="font-medium text-cocoa-dark">${item.name}</p>
-                                    <p class="text-sm text-gray-500">$${item.price.toFixed(2)} each</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center space-x-3">
-                                <div class="flex items-center border border-gray-300 rounded-lg">
-                                    <button onclick="updateQuantity('${item.id}', -1)" class="p-2 text-cocoa-dark hover:bg-gray-100 rounded-l-lg">-</button>
-                                    <span class="px-3 text-sm font-semibold">${item.quantity}</span>
-                                    <button onclick="updateQuantity('${item.id}', 1)" class="p-2 text-cocoa-dark hover:bg-gray-100 rounded-r-lg">+</button>
-                                </div>
-                                <span class="font-semibold text-cocoa-dark w-16 text-right">$${itemTotal}</span>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-
-            // Update total cost
-            cartTotalElement.textContent = `$${totalCost.toFixed(2)}`;
         }
 
         function toggleCartModal(show) {
@@ -257,7 +200,76 @@
             }
         }
         
-        window.toggleCartModal = toggleCartModal;
+        // --- UI RENDERING & VIEW MANAGEMENT ---
+
+        /**
+         * Toggles between the main scrollable view and a dedicated policy page.
+         */
+        function showPageView(viewId) {
+            const views = ['main-scroll-view', 'policy-faqs', 'policy-shipping'];
+            
+            views.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+
+            const targetEl = document.getElementById(viewId);
+            if (targetEl) {
+                targetEl.style.display = 'block';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                // If we are showing the main view, re-filter to 'all'
+                if (viewId === 'main-scroll-view') {
+                    filterProducts('all');
+                }
+            }
+        }
+        
+        function updateCartUI() {
+            const cartContent = document.getElementById('cart-content');
+            const cartTotalElement = document.getElementById('cart-total');
+            const cartCountElement = document.getElementById('cart-count');
+            const cartModalEmpty = document.getElementById('cart-modal-empty');
+            
+            const itemArray = Object.values(cartItems);
+            const totalItems = itemArray.reduce((sum, item) => sum + item.quantity, 0);
+            const totalCost = itemArray.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+            
+            cartCountElement.textContent = `Basket (${totalItems})`;
+
+            cartContent.innerHTML = '';
+            if (itemArray.length === 0) {
+                cartModalEmpty.classList.remove('hidden');
+                document.getElementById('cart-modal-footer').classList.add('hidden');
+            } else {
+                cartModalEmpty.classList.add('hidden');
+                document.getElementById('cart-modal-footer').classList.remove('hidden');
+
+                itemArray.forEach(item => {
+                    const itemTotal = (item.price * item.quantity);
+                    cartContent.innerHTML += `
+                        <div class="flex items-center justify-between border-b border-gray-200 py-3">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-2xl">${item.emoji}</span>
+                                <div>
+                                    <p class="font-medium text-dark-text">${item.name}</p>
+                                    <p class="text-sm text-gray-500">${formatBDT(item.price)} each</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <div class="flex items-center border border-gray-300 rounded-lg">
+                                    <button data-action="update-qty" data-product-id="${item.id}" data-change="-1" class="p-2 text-dark-text hover:bg-gray-100 rounded-l-lg">-</button>
+                                    <span class="px-3 text-sm font-semibold">${item.quantity}</span>
+                                    <button data-action="update-qty" data-product-id="${item.id}" data-change="1" class="p-2 text-dark-text hover:bg-gray-100 rounded-r-lg">+</button>
+                                </div>
+                                <span class="font-semibold text-primary w-20 text-right">${formatBDT(itemTotal)}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            cartTotalElement.textContent = formatBDT(totalCost);
+        }
 
         function showTemporalMessage(message, colorClass) {
             const box = document.getElementById('message-box');
@@ -269,21 +281,181 @@
                 box.classList.add('hidden');
             }, 3000);
         }
+
+        function renderProductGrid(productsToRender) {
+            const grid = document.getElementById('product-grid');
+            grid.innerHTML = ''; // Clear existing products
+            
+            // Convert PRODUCTS object to an array for rendering
+            const productArray = Object.values(productsToRender);
+
+            productArray.forEach(product => {
+                grid.innerHTML += `
+                    <div class="product-card bg-white rounded-xl overflow-hidden shadow-xl border border-gray-100">
+                        <div class="h-48 overflow-hidden bg-secondary-light flex items-center justify-center">
+                            <span class="text-6xl">${product.emoji}</span>
+                        </div>
+                        <div class="p-6 text-center">
+                            <h3 class="text-xl font-semibold mb-2 text-dark-text">${product.name}</h3>
+                            <p class="text-gray-600 mb-4 text-sm">${product.category === 'dark' ? 'Intense cocoa profile.' : 'Smooth and delightful.'}</p>
+                            <span class="text-2xl font-bold text-primary block mb-4">${formatBDT(product.price)}</span>
+                            <button data-action="add-to-cart" data-product-id="${product.id}" class="w-full bg-accent text-primary-dark font-medium py-3 rounded-xl hover:bg-amber-500 transition duration-300">
+                                Add to Basket
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            if (productArray.length === 0) {
+                 grid.innerHTML = '<p class="text-center text-xl text-gray-500 col-span-full py-12">No products found in this category.</p>';
+            }
+        }
+
+        function filterProducts(category) {
+            const productsArray = Object.values(PRODUCTS);
+            let filteredProducts;
+            
+            const currentTitle = document.getElementById('shop-section-title');
+            
+            if (category === 'all') {
+                filteredProducts = productsArray;
+                currentTitle.textContent = "Featured Bars & Truffles";
+            } else {
+                filteredProducts = productsArray.filter(p => p.category === category);
+                // Simple title update based on category
+                let title = category.charAt(0).toUpperCase() + category.slice(1);
+                if (category === 'dark') title = 'Intense Dark Chocolates';
+                if (category === 'truffles') title = 'Artisan Truffle Collections';
+                if (category === 'other') title = 'Cocoa Powders & Spreads';
+                currentTitle.textContent = title;
+            }
+            
+            // Update active state on navigation
+            document.querySelectorAll('[data-category]').forEach(link => {
+                link.classList.remove('font-extrabold', 'text-accent');
+                link.classList.add('text-white', 'hover:text-accent');
+            });
+            const activeLink = document.querySelector(`[data-category="${category}"]`);
+            if(activeLink) {
+                activeLink.classList.remove('text-white', 'hover:text-accent');
+                activeLink.classList.add('font-extrabold', 'text-accent');
+            }
+
+            // Scroll to the shop section
+            const shopSection = document.getElementById('shop');
+            shopSection.scrollIntoView({ behavior: 'smooth' });
+
+            renderProductGrid(filteredProducts);
+        }
+
+        async function submitContactForm(event) {
+            event.preventDefault();
+            const form = event.target;
+            const name = form.name.value;
+            const email = form.email.value;
+            const message = form.message.value;
+
+            if (!name || !email || !message) {
+                 showTemporalMessage("Please fill out all fields.", 'bg-red-500');
+                 return;
+            }
+
+            console.log("Contact Form Submission:", { name, email, message });
+            
+            showTemporalMessage("Thank you! A taste specialist will contact you shortly.", 'bg-primary');
+            
+            setTimeout(() => form.reset(), 500);
+        }
         
-        // Initialize the app when the window loads
-        window.onload = initializeFirebase;
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            // Event delegation for the main product grid (Add to Cart buttons)
+            document.getElementById('product-grid-container').addEventListener('click', (event) => {
+                const target = event.target.closest('[data-action="add-to-cart"]');
+                if (target) {
+                    const productId = target.getAttribute('data-product-id');
+                    addToCart(productId);
+                }
+            });
+
+            // Event listeners for Cart Modal toggling
+            document.getElementById('cart-button').addEventListener('click', () => toggleCartModal(true));
+            document.getElementById('cart-close-button').addEventListener('click', () => toggleCartModal(false));
+            document.getElementById('cart-modal').addEventListener('click', (event) => {
+                if(event.target.id === 'cart-modal') toggleCartModal(false);
+            });
+
+
+            // Event delegation for Cart Modal dynamic buttons (Quantity +/-)
+            document.getElementById('cart-content').addEventListener('click', (event) => {
+                const target = event.target.closest('[data-action="update-qty"]');
+                if (target) {
+                    const productId = target.getAttribute('data-product-id');
+                    const change = parseInt(target.getAttribute('data-change'));
+                    updateQuantity(productId, change);
+                }
+            });
+
+            // Event listener for Checkout button
+            document.getElementById('checkout-button').addEventListener('click', checkoutCart);
+            
+            // Event listener for the new Contact Form
+            document.getElementById('contact-form')?.addEventListener('submit', submitContactForm);
+
+
+            // Setup view switching for Policy Links and Main Links
+            document.querySelectorAll('[data-link-type]').forEach(link => {
+                link.addEventListener('click', (event) => {
+                    event.preventDefault(); 
+                    const linkType = link.getAttribute('data-link-type');
+                    const target = link.getAttribute('data-target');
+
+                    if (linkType === 'policy') {
+                         showPageView(target);
+                    } else if (linkType === 'main') {
+                         showPageView('main-scroll-view');
+                    } else if (linkType === 'category') {
+                         showPageView('main-scroll-view');
+                         filterProducts(target);
+                    }
+                });
+            });
+            
+            // Simple search simulation
+            document.getElementById('search-input').addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    const query = event.target.value.trim();
+                    if (query) {
+                        showTemporalMessage(`Searching for the perfect flavor: "${query}"...`, 'bg-primary-light');
+                        event.target.value = ''; // Clear input
+                    }
+                }
+            });
+        }
+
+        // Initialize the app after the DOM is fully loaded and before Firebase starts
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            initializeFirebase();
+            showPageView('main-scroll-view'); 
+            filterProducts('all'); // Initial load of all products
+        });
 
     </script>
     <script>
-        // Tailwind config and custom styles (non-module script, remains here for simplicity)
+        // Tailwind config and custom styles
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'cocoa-dark': '#3e2723', // Dark Brown
-                        'cocoa-light': '#8d6e63', // Medium Brown
-                        'cream': '#fff8e1', // Light Cream/Gold
-                        'accent': '#ffb300', // Deep Gold/Caramel
+                        'primary': '#4E342E', // Deep Chocolate Brown
+                        'primary-dark': '#3E2723', // Very Dark Brown (Text/Footer)
+                        'primary-light': '#795548', // Milk Chocolate Brown
+                        'secondary-light': '#FAF0E6', // Linen/Creamy background accent
+                        'accent': '#FFD700', // Gold/Copper (Highlight, Buttons)
+                        'dark-text': '#3E2723', // Very Dark Brown (Main Text)
+                        'background': '#F9FAFB', // Light Gray background
                     },
                 }
             }
@@ -293,27 +465,70 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            color: #3e2723; /* cocoa-dark */
-            background-color: #fff8e1; /* cream */
+            color: #3E2723; /* dark-text */
+            background-color: #FAF0E6; /* secondary-light for a creamy base */
         }
-        /* Style for the featured product cards */
+        
         .product-card {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
         .product-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 15px -3px rgba(62, 39, 35, 0.1), 0 4px 6px -2px rgba(62, 39, 35, 0.05); /* Soft cocoa shadow */
+            box-shadow: 0 10px 15px -3px rgba(62, 39, 35, 0.1), 0 4px 6px -2px rgba(62, 39, 35, 0.05);
         }
-        /* Custom scrollbar for cart modal on desktop */
+        
         .cart-scrollable::-webkit-scrollbar {
             width: 8px;
         }
         .cart-scrollable::-webkit-scrollbar-thumb {
-            background-color: '#8d6e63'; /* cocoa-light */
+            background-color: #795548; /* primary-light */
             border-radius: 4px;
         }
         .cart-scrollable::-webkit-scrollbar-track {
-            background-color: '#fff8e1'; /* cream */
+            background-color: #FAF0E6; /* creamy background */
+        }
+
+        details {
+            border-bottom: 1px solid #D7CCC8; /* Light brown divider */
+            padding: 1rem 0;
+            cursor: pointer;
+        }
+        summary {
+            font-weight: 600;
+            color: #3E2723; /* dark-text */
+            padding: 0.5rem 0;
+            outline: none;
+            list-style: none;
+        }
+        summary:after {
+            content: '▶'; 
+            float: right;
+            transform: scale(0.7);
+            transition: transform 0.2s;
+        }
+        details[open] summary:after {
+            content: '▼'; 
+        }
+        details[open] summary {
+            color: #FFD700; /* accent - Gold */
+        }
+        .details-content {
+            padding: 1rem 0 0.5rem 1rem;
+            color: #5D4037; /* Slightly lighter brown text */
+        }
+        
+        .modern-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #EFEBE9; /* Very light brown border */
+            border-radius: 0.75rem;
+            background-color: white;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .modern-input:focus {
+            outline: none;
+            border-color: #4E342E; /* primary - Deep Chocolate */
+            box-shadow: 0 0 0 3px rgba(78, 52, 46, 0.2);
         }
     </style>
 </head>
@@ -323,49 +538,67 @@
     <div id="message-box" class="hidden"></div>
     
     <!-- Header & Navigation -->
-    <header class="sticky top-0 z-50 bg-cocoa-dark shadow-lg">
-        <nav class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    <header class="sticky top-0 z-50 bg-white shadow-lg">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center space-y-3 md:space-y-0">
             <!-- Logo/Brand Name -->
-            <div class="text-2xl font-extrabold text-cream tracking-wider">
-                Velvet Cocoa
-            </div>
+            <a href="#home" data-link-type="main" data-target="main-scroll-view" class="text-4xl font-extrabold text-primary-dark tracking-wide hover:text-primary transition duration-300">
+                CoCo Crust
+            </a>
 
-            <!-- Desktop Navigation Links -->
-            <div class="hidden md:flex space-x-8 text-lg font-medium">
-                <a href="#home" class="text-cream hover:text-accent transition duration-300">Home</a>
-                <a href="#shop" class="text-cream hover:text-accent transition duration-300">Shop</a>
-                <a href="#story" class="text-cream hover:text-accent transition duration-300">Our Story</a>
-                <a href="#contact" class="text-cream hover:text-accent transition duration-300">Contact</a>
+            <!-- Search Bar -->
+            <div class="w-full md:w-1/2 flex items-center border border-gray-300 rounded-xl bg-gray-50 focus-within:border-primary transition duration-300">
+                <input type="text" id="search-input" placeholder="Search for Truffles, Dark, or Cocoa..." class="w-full p-3 rounded-l-xl focus:outline-none bg-transparent" />
+                <button class="bg-primary text-white p-3 rounded-r-xl hover:bg-primary-light transition duration-300">
+                    <!-- Search Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </button>
             </div>
 
             <!-- Cart/Action Button (Mobile/Desktop) -->
-            <button onclick="toggleCartModal(true)" id="cart-button" class="bg-accent text-cocoa-dark font-semibold py-2 px-4 rounded-xl shadow-md hover:bg-yellow-700 transition duration-300 inline-flex items-center">
-                <!-- Shopping Cart Icon (Lucide-react equivalent SVG) -->
+            <button id="cart-button" class="bg-accent text-primary-dark font-semibold py-2 px-4 rounded-xl shadow-md hover:bg-amber-500 transition duration-300 inline-flex items-center">
+                <!-- Shopping Cart Icon -->
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
                     <circle cx="9" cy="21" r="1"></circle>
                     <circle cx="20" cy="21" r="1"></circle>
                     <path d="M1 1h4l2.68 12.8a2 2 0 0 0 2 1.2h7.32a2 2 0 0 0 2-1.2L23 6H6"></path>
                 </svg>
-                <span id="cart-count">Cart (0)</span>
+                <span id="cart-count">Basket (0)</span>
             </button>
+        </div>
+        <!-- Secondary Navigation (Categories) -->
+        <nav class="bg-primary-dark shadow-inner hidden md:block">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-2">
+                <div class="flex space-x-6 text-sm font-medium">
+                    <!-- Category Links with Filtering -->
+                    <a href="#shop" data-link-type="category" data-target="all" class="text-white hover:text-accent transition duration-300 py-1 font-extrabold text-accent" data-category="all">All Bars & Treats</a>
+                    <a href="#shop" data-link-type="category" data-target="dark" class="text-white hover:text-accent transition duration-300 py-1" data-category="dark">Dark Chocolate</a>
+                    <a href="#shop" data-link-type="category" data-target="milk" class="text-white hover:text-accent transition duration-300 py-1" data-category="milk">Milk Chocolate</a>
+                    <a href="#shop" data-link-type="category" data-target="white" class="text-white hover:text-accent transition duration-300 py-1" data-category="white">White Chocolate</a>
+                    <a href="#shop" data-link-type="category" data-target="truffles" class="text-white hover:text-accent transition duration-300 py-1" data-category="truffles">Truffles & Bonbons</a>
+                    <a href="#shop" data-link-type="category" data-target="other" class="text-white hover:text-accent transition duration-300 py-1" data-category="other">Powders & Spreads</a>
+                </div>
+            </div>
         </nav>
     </header>
 
     <!-- Shopping Cart Modal (Hidden by default) -->
-    <div id="cart-modal" class="hidden fixed inset-0 bg-cocoa-dark/70 z-[60] flex justify-end" onclick="if(event.target.id === 'cart-modal') toggleCartModal(false)">
-        <div class="bg-cream w-full md:w-96 h-full shadow-2xl flex flex-col transform translate-x-0 transition-transform duration-300" onclick="event.stopPropagation()">
+    <div id="cart-modal" class="hidden fixed inset-0 bg-primary-dark/70 z-[60] flex justify-end">
+        <div class="bg-white w-full md:w-96 h-full shadow-2xl flex flex-col transform translate-x-0 transition-transform duration-300" onclick="event.stopPropagation()">
             
             <!-- Modal Header -->
-            <div class="p-6 border-b border-cocoa-light/30">
-                <h3 class="text-2xl font-bold flex justify-between items-center">
-                    Your Cart
-                    <button onclick="toggleCartModal(false)" class="text-cocoa-dark hover:text-red-600">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-2xl font-bold flex justify-between items-center text-primary">
+                    Your Chocolate Basket
+                    <button id="cart-close-button" class="text-dark-text hover:text-red-600">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </h3>
-                <p class="text-sm text-gray-500 mt-1">Items saved across devices.</p>
+                <p class="text-xs text-gray-500 mt-1">Real-time cart synchronized. User ID: ${userId}</p>
             </div>
 
             <!-- Modal Body: Cart Content -->
@@ -374,21 +607,21 @@
             </div>
 
             <!-- Modal Body: Empty State -->
-            <div id="cart-modal-empty" class="p-6 text-center text-cocoa-light">
-                <span class="text-5xl block mb-4">🛒</span>
-                <p class="font-semibold text-lg">Your cart is empty.</p>
-                <p class="text-sm">Time to find your favorite treat!</p>
+            <div id="cart-modal-empty" class="p-6 text-center text-gray-500">
+                <span class="text-5xl block mb-4">😋</span>
+                <p class="font-semibold text-lg">Your basket is waiting!</p>
+                <p class="text-sm">Time to choose your indulgence.</p>
             </div>
 
 
             <!-- Modal Footer (Total & Checkout) -->
-            <div id="cart-modal-footer" class="p-6 bg-white border-t border-cocoa-light/30">
+            <div id="cart-modal-footer" class="p-6 bg-secondary-light border-t border-gray-200 hidden">
                 <div class="flex justify-between items-center mb-4 font-bold text-xl">
                     <span>Subtotal:</span>
-                    <span id="cart-total" class="text-accent">$0.00</span>
+                    <span id="cart-total" class="text-primary-dark">৳0</span>
                 </div>
-                <button onclick="checkoutCart()" class="w-full bg-accent text-cocoa-dark font-bold py-4 rounded-xl shadow-lg hover:bg-yellow-700 transition duration-300">
-                    Proceed to Checkout
+                <button id="checkout-button" class="w-full bg-accent text-primary-dark font-bold py-4 rounded-xl shadow-lg hover:bg-amber-600 transition duration-300">
+                    Place Indulgence Order
                 </button>
             </div>
         </div>
@@ -396,216 +629,282 @@
     
     <!-- Main Content Area -->
     <main>
+        
+        <!-- === 1. MAIN SCROLLABLE VIEW (Home, Features, Shop, Contact) === -->
+        <div id="main-scroll-view">
+            <!-- 1. Hero Section -->
+            <section id="home" class="relative bg-primary py-20 md:py-32 overflow-hidden">
+                <div class="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center">
+                    <!-- Text Content -->
+                    <div class="md:w-1/2 text-center md:text-left mb-10 md:mb-0 z-10 text-white">
+                        <p class="text-accent text-lg font-semibold uppercase tracking-widest mb-3">Bean-to-Bar Craft</p>
+                        <h1 class="text-5xl md:text-6xl font-extrabold leading-tight mb-6">
+                            The Finest Cocoa. Pure, Handcrafted Indulgence.
+                        </h1>
+                        <p class="text-white/90 text-xl mb-8">
+                            Discover our range of single-origin dark chocolates, decadent truffles, and specialty cocoa products.
+                        </p>
+                        <a href="#shop" data-link-type="category" data-target="all" class="inline-block bg-accent text-primary-dark font-bold text-xl py-4 px-10 rounded-xl shadow-2xl hover:bg-amber-500 transition duration-300 transform hover:scale-105">
+                            Shop Our Collection
+                        </a>
+                    </div>
 
-        <!-- 1. Hero Section -->
-        <section id="home" class="relative bg-cocoa-dark py-20 md:py-32">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center">
-                <!-- Text Content -->
-                <div class="md:w-1/2 text-center md:text-left mb-10 md:mb-0">
-                    <p class="text-accent text-lg font-semibold uppercase tracking-widest mb-3">Artisan & Ethical</p>
-                    <h1 class="text-5xl md:text-6xl font-extrabold text-cream leading-tight mb-6">
-                        Experience the True Taste of Cacao.
-                    </h1>
-                    <p class="text-cream text-xl opacity-90 mb-8">
-                        Hand-crafted from single-origin beans, our chocolates offer an intense, velvety experience you won't forget.
+                    <!-- Image Placeholder (Chocolate Bar) -->
+                    <div class="md:w-1/2 flex justify-center p-4 z-10">
+                        <img src="https://placehold.co/600x400/795548/FAF0E6?text=COCOA+CRUST+CHOCOLATE" 
+                             alt="Artisan chocolate bar with gold packaging" 
+                             class="w-full max-w-sm md:max-w-md h-auto rounded-2xl shadow-2xl object-cover transform hover:scale-[1.02] transition-transform duration-500"
+                             onerror="this.onerror=null; this.src='https://placehold.co/600x400/795548/FAF0E6?text=CHOCOLATE';"
+                        >
+                    </div>
+                </div>
+                <!-- Background decorative element -->
+                <div class="absolute bottom-0 right-0 h-40 w-40 bg-primary-dark opacity-30 transform translate-x-1/2 translate-y-1/2 rounded-full"></div>
+            </section>
+
+            <!-- 2. Core Value/Why Choose Us Section -->
+            <section id="story" class="py-16 md:py-24 bg-white">
+                <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                    <h2 class="text-4xl font-bold text-center text-dark-text mb-12">
+                        Our Commitment to Craft & Quality
+                    </h2>
+
+                    <div class="grid md:grid-cols-4 gap-6 text-center">
+                        <!-- Feature 1: Sourcing -->
+                        <div class="p-6 bg-secondary-light rounded-xl shadow-lg border-t-4 border-primary">
+                            <span class="text-4xl block mb-4" role="img" aria-label="Sourcing">🌎</span>
+                            <h3 class="text-xl font-semibold mb-3 text-dark-text">Ethically Sourced</h3>
+                            <p class="text-gray-600 text-sm">We use only high-quality cocoa beans, sustainably sourced from the best farms.</p>
+                        </div>
+                        <!-- Feature 2: Handcrafted -->
+                        <div class="p-6 bg-secondary-light rounded-xl shadow-lg border-t-4 border-primary">
+                            <span class="text-4xl block mb-4" role="img" aria-label="Handcrafted">👩‍🍳</span>
+                            <h3 class="text-xl font-semibold mb-3 text-dark-text">Artisan Process</h3>
+                            <p class="text-gray-600 text-sm">Small-batch production ensures perfect temper and complex flavor development.</p>
+                        </div>
+                        <!-- Feature 3: Packaging -->
+                        <div class="p-6 bg-secondary-light rounded-xl shadow-lg border-t-4 border-primary">
+                            <span class="text-4xl block mb-4" role="img" aria-label="Luxury">🎁</span>
+                            <h3 class="text-xl font-semibold mb-3 text-dark-text">Luxury Gifting</h3>
+                            <p class="text-gray-600 text-sm">Elegant, minimal packaging perfect for gifting or personal indulgence.</p>
+                        </div>
+                         <!-- Feature 4: Flavor -->
+                        <div class="p-6 bg-secondary-light rounded-xl shadow-lg border-t-4 border-primary">
+                            <span class="text-4xl block mb-4" role="img" aria-label="Flavor">👅</span>
+                            <h3 class="text-xl font-semibold mb-3 text-dark-text">Unique Flavors</h3>
+                            <p class="text-gray-600 text-sm">Explore our daring collection of infused and spiced chocolate profiles.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 3. Shop Section (Dynamically Renders Products) -->
+            <section id="shop" class="py-16 md:py-24 bg-background">
+                <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                    <h2 id="shop-section-title" class="text-4xl font-bold text-center text-dark-text mb-6">
+                        Featured Bars & Truffles
+                    </h2>
+                    <p class="text-center text-lg text-gray-500 mb-12">
+                        Use the navigation above to filter by chocolate type!
                     </p>
-                    <a href="#shop" class="inline-block bg-accent text-cocoa-dark font-bold text-xl py-4 px-10 rounded-xl shadow-2xl hover:bg-yellow-700 transition duration-300 transform hover:scale-105">
-                        Shop Now
+
+                    <!-- Product Grid Container (Content generated by JS) -->
+                    <div id="product-grid-container">
+                        <div id="product-grid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                            <!-- Product Cards will be injected here by filterProducts() -->
+                        </div> 
+                    </div>
+                    
+                </div>
+            </section>
+            
+            <!-- 4. Quick Support/Contact Section -->
+            <section id="contact-support" class="py-16 md:py-24 bg-primary-dark/95">
+                <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center max-w-lg">
+                    <h2 class="text-4xl font-bold text-white mb-4">
+                        Speak to a Taste Specialist
+                    </h2>
+                    <p class="text-white/90 text-lg mb-8">
+                        Have a question about sourcing, flavor profiles, or corporate orders?
+                    </p>
+                    
+                    <!-- NEW: WhatsApp Link -->
+                    <a href="https://wa.me/8801700000000?text=Hello%20CoCo%20Crust%2C%20I%20have%20a%20question%20about%20your%20artisan%20chocolate." 
+                       target="_blank" 
+                       class="inline-flex items-center justify-center w-full md:w-3/4 space-x-2 bg-green-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:bg-green-600 transition duration-300 mb-8 transform hover:scale-[1.01]">
+                        <!-- WhatsApp Icon (inline SVG) -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="currentColor" stroke-width="0" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2C6.48 2 2 6.48 2 12c0 1.45.32 2.85.94 4.1l-1.01 3.73 3.84-1.28c1.17.65 2.47 1.01 3.8 1.01H12c5.52 0 10-4.48 10-10S17.52 2 12 2zm4.8 14.8l-.48-.28c-.28-.16-1.67-.82-1.93-.93-.27-.11-.46-.16-.65.16-.19.32-.75.93-.92 1.12-.17.19-.34.21-.63.08-.29-.13-1.21-.45-2.3-1.42-.87-.76-1.45-1.7-1.62-1.99-.17-.29-.02-.45.14-.61.13-.13.28-.32.42-.48.14-.17.19-.28.28-.48.09-.2-.04-.38-.04-.48-.04-.11-.27-.26-.37-.48-.1-.22-.79-1.9-.92-2.31-.13-.41-.26-.35-.44-.36-.18 0-.39-.02-.59-.02s-.52.05-.79.37c-.27.32-1.01.98-1.01 2.39 0 1.41 1.03 2.77 1.18 2.96.15.19 2.03 3.1 4.93 4.31 2.9.99 3.52.89 4.14.83.62-.06 1.17-.41 1.33-.82.16-.41.16-.76.11-.82-.05-.06-.19-.1-2.02-1z"/>
+                        </svg>
+                        <span>Quick Chat on WhatsApp</span>
                     </a>
-                </div>
 
-                <!-- Image Placeholder (using a stylized SVG/Emoji) -->
-                <div class="md:w-1/2 flex justify-center p-4">
-                    <div class="text-8xl md:text-[10rem] animate-pulse">
-                        <span role="img" aria-label="Chocolate Bar">🍫</span>
-                    </div>
+                    <!-- Modern Contact Form -->
+                    <form id="contact-form" class="space-y-6 bg-white p-8 rounded-xl shadow-2xl text-left">
+                        
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-dark-text mb-1">Your Full Name</label>
+                            <input type="text" id="name" name="name" placeholder="Enter your name" required 
+                                   class="modern-input" />
+                        </div>
+                        
+                        <div>
+                            <label for="email" class="block text-sm font-medium text-dark-text mb-1">Email Address</label>
+                            <input type="email" id="email" name="email" placeholder="you@example.com" required 
+                                   class="modern-input" />
+                        </div>
+                        
+                        <div>
+                            <label for="message" class="block text-sm font-medium text-dark-text mb-1">Your Inquiry</label>
+                            <textarea id="message" name="message" rows="4" placeholder="Ask about corporate orders or custom flavors..." required 
+                                      class="modern-input resize-none"></textarea>
+                        </div>
+                        
+                        <button type="submit" 
+                                class="w-full bg-accent text-primary-dark font-bold text-lg py-4 rounded-xl shadow-lg hover:bg-amber-500 transition duration-300 transform hover:scale-[1.01]">
+                            Send Email Inquiry
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </div>
+        <!-- === END MAIN SCROLLABLE VIEW === -->
+
+
+        <!-- === 2. DEDICATED POLICY VIEWS (Hidden by default) === -->
+
+        <!-- FAQs Section (Unchanged) -->
+        <section id="policy-faqs" style="display: none;" class="py-16 md:py-24 bg-background">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
+                <h2 class="text-4xl font-bold text-center text-dark-text mb-12">
+                    Frequently Asked Questions
+                </h2>
+
+                <div class="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+                    
+                    <details>
+                        <summary>How should I store CoCo Crust chocolate?</summary>
+                        <div class="details-content">
+                            <p>For the best experience, store your chocolate in a cool, dry place between **$15^{\circ}C$ and $18^{\circ}C$ ($59^{\circ}F$ and $64^{\circ}F$)**. Avoid the refrigerator if possible, as it can cause sugar bloom (a white film) due to condensation.</p>
+                        </div>
+                    </details>
+                    
+                    <details>
+                        <summary>What is the difference between single-origin and blend bars?</summary>
+                        <div class="details-content">
+                            <p>**Single-origin** means all the cocoa beans come from one specific country or region, giving the bar a distinct, traceable flavor profile. **Blends** combine beans from various sources to achieve a consistent and balanced flavor.</p>
+                        </div>
+                    </details>
+
+                    <details>
+                        <summary>Are your truffles gluten-free?</summary>
+                        <div class="details-content">
+                            <p>Most of our dark chocolate and truffle recipes are naturally gluten-free. However, please check the specific product label for any potential cross-contamination warnings, as we use shared equipment in our kitchen.</p>
+                        </div>
+                    </details>
+
+                    <details>
+                        <summary>How long will my chocolate delivery take?</summary>
+                        <div class="details-content">
+                            <p>We typically dispatch orders within 1 working day. Delivery in Dhaka is usually 1-2 days, and outside Dhaka is 3-5 days. We use **temperature-controlled packaging** during hot months to ensure freshness.</p>
+                        </div>
+                    </details>
+
                 </div>
             </div>
         </section>
 
-        <!-- 2. Our Story/Why Choose Us Section -->
-        <section id="story" class="py-16 md:py-24 bg-cream">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-                <h2 class="text-4xl font-bold text-center text-cocoa-dark mb-12">
-                    Crafted with Passion
+        <!-- Shipping & Returns Section (Unchanged) -->
+        <section id="policy-shipping" style="display: none;" class="py-16 md:py-24 bg-secondary-light">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
+                <h2 class="text-4xl font-bold text-center text-dark-text mb-12">
+                    Shipping & Melt-Free Guarantee
                 </h2>
 
-                <div class="grid md:grid-cols-3 gap-8 text-center">
-                    <!-- Feature 1 -->
-                    <div class="p-6 bg-white rounded-xl shadow-lg border-t-4 border-accent">
-                        <span class="text-4xl block mb-4" role="img" aria-label="Bean">🌿</span>
-                        <h3 class="text-xl font-semibold mb-3 text-cocoa-dark">Single-Origin Cacao</h3>
-                        <p class="text-gray-600">We source only the finest beans from sustainable farms in South America, ensuring peak flavor and ethics.</p>
+                <div class="grid md:grid-cols-2 gap-8 bg-white rounded-2xl shadow-xl p-6 md:p-8">
+                    <!-- Shipping Policy -->
+                    <div class="border-b md:border-b-0 md:border-r border-gray-200 pb-6 md:pr-6 md:pb-0">
+                        <h3 class="text-2xl font-semibold text-primary-dark mb-4 border-l-4 border-accent pl-3">Temperature-Controlled Shipping</h3>
+                        <ul class="space-y-3 text-gray-700 list-disc list-inside">
+                            <li>We use insulated thermal packaging and chilled gel packs for all shipments during summer months.</li>
+                            <li>Shipping fee starts at **৳80** for Dhaka. Free shipping over **৳2,500**.</li>
+                            <li>We highly recommend choosing an address where someone can receive the package immediately upon arrival.</li>
+                        </ul>
                     </div>
-                    <!-- Feature 2 -->
-                    <div class="p-6 bg-white rounded-xl shadow-lg border-t-4 border-accent">
-                        <span class="text-4xl block mb-4" role="img" aria-label="Hand">✋</span>
-                        <h3 class="text-xl font-semibold mb-3 text-cocoa-dark">Hand-Crafted Batches</h3>
-                        <p class="text-gray-600">Each bar is meticulously tempered and molded by our master chocolatier in small, fresh batches.</p>
-                    </div>
-                    <!-- Feature 3 -->
-                    <div class="p-6 bg-white rounded-xl shadow-lg border-t-4 border-accent">
-                        <span class="text-4xl block mb-4" role="img" aria-label="Heart">❤️</span>
-                        <h3 class="text-xl font-semibold mb-3 text-cocoa-dark">Pure Ingredients</h3>
-                        <p class="text-gray-600">No artificial flavors, just simple, premium ingredients: cacao, cane sugar, and a touch of magic.</p>
+                    
+                    <!-- Exchange Policy -->
+                    <div class="pt-6 md:pl-6 md:pt-0">
+                        <h3 class="text-2xl font-semibold text-primary-dark mb-4 border-l-4 border-accent pl-3">Quality & Exchange</h3>
+                        <ul class="space-y-3 text-gray-700 list-disc list-inside">
+                            <li>**Melt-Free Guarantee:** If your product arrives melted or damaged, please contact us within **4 hours** of delivery with a photo for an immediate replacement.</li>
+                            <li>Due to the nature of our food products, we cannot accept returns for opened or consumed items.</li>
+                            <li>For non-melt issues, we offer a replacement or full credit within 7 days.</li>
+                        </ul>
                     </div>
                 </div>
-            </div>
-        </section>
-
-        <!-- 3. Featured Products Section -->
-        <section id="shop" class="py-16 md:py-24 bg-cocoa-light/10">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-                <h2 class="text-4xl font-bold text-center text-cocoa-dark mb-6">
-                    Our Best Sellers
-                </h2>
-                <p class="text-center text-lg text-cocoa-light mb-12">
-                    A taste of our flagship collection, from intense dark chocolate to creamy milk.
-                </p>
-
-                <!-- Product Grid -->
-                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
-
-                    <!-- Product 1: Dark Roast -->
-                    <div class="product-card bg-white rounded-xl overflow-hidden shadow-xl">
-                        <div class="bg-cocoa-dark/70 h-48 flex items-center justify-center">
-                            <span class="text-7xl" role="img" aria-label="Dark Chocolate Bar">🖤</span>
-                        </div>
-                        <div class="p-6 text-center">
-                            <h3 class="text-xl font-semibold mb-2 text-cocoa-dark">The Dark Roast (85%)</h3>
-                            <p class="text-gray-600 mb-4 text-sm">Intense, nutty notes with a smooth finish.</p>
-                            <span class="text-2xl font-bold text-accent block mb-4">$12.00</span>
-                            <button onclick="addToCart(this)" data-product-id="dark-roast" class="w-full bg-cocoa-light text-white font-medium py-3 rounded-xl hover:bg-cocoa-dark transition duration-300">
-                                Add to Cart
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Product 2: Sea Salt Caramel -->
-                    <div class="product-card bg-white rounded-xl overflow-hidden shadow-xl">
-                        <div class="bg-cream/70 h-48 flex items-center justify-center">
-                            <span class="text-7xl" role="img" aria-label="Caramel Chocolate">🍬</span>
-                        </div>
-                        <div class="p-6 text-center">
-                            <h3 class="text-xl font-semibold mb-2 text-cocoa-dark">Sea Salt Caramel</h3>
-                            <p class="text-gray-600 mb-4 text-sm">Milk chocolate infused with flakes of Maldon sea salt.</p>
-                            <span class="text-2xl font-bold text-accent block mb-4">$11.50</span>
-                            <button onclick="addToCart(this)" data-product-id="sea-salt" class="w-full bg-cocoa-light text-white font-medium py-3 rounded-xl hover:bg-cocoa-dark transition duration-300">
-                                Add to Cart
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Product 3: Raspberry Delight -->
-                    <div class="product-card bg-white rounded-xl overflow-hidden shadow-xl">
-                        <div class="bg-red-500/70 h-48 flex items-center justify-center">
-                            <span class="text-7xl" role="img" aria-label="Raspberry Chocolate">🍓</span>
-                        </div>
-                        <div class="p-6 text-center">
-                            <h3 class="text-xl font-semibold mb-2 text-cocoa-dark">Raspberry Delight</h3>
-                            <p class="text-gray-600 mb-4 text-sm">White chocolate with freeze-dried, tangy raspberries.</p>
-                            <span class="text-2xl font-bold text-accent block mb-4">$13.50</span>
-                            <button onclick="addToCart(this)" data-product-id="raspberry" class="w-full bg-cocoa-light text-white font-medium py-3 rounded-xl hover:bg-cocoa-dark transition duration-300">
-                                Add to Cart
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Product 4: The Taster's Box -->
-                    <div class="product-card bg-white rounded-xl overflow-hidden shadow-xl">
-                        <div class="bg-gray-400/70 h-48 flex items-center justify-center">
-                            <span class="text-7xl" role="img" aria-label="Box of Chocolates">🎁</span>
-                        </div>
-                        <div class="p-6 text-center">
-                            <h3 class="text-xl font-semibold mb-2 text-cocoa-dark">The Taster's Box</h3>
-                            <p class="text-gray-600 mb-4 text-sm">Our 12 favorite truffles in a beautiful gift box.</p>
-                            <span class="text-2xl font-bold text-accent block mb-4">$35.00</span>
-                            <button onclick="addToCart(this)" data-product-id="tasters-box" class="w-full bg-cocoa-light text-white font-medium py-3 rounded-xl hover:bg-cocoa-dark transition duration-300">
-                                Add to Cart
-                            </button>
-                        </div>
-                    </div>
-
-                </div> <!-- End Product Grid -->
-                
-                <div class="mt-12 text-center">
-                    <a href="#" class="inline-block border-2 border-cocoa-dark text-cocoa-dark font-semibold py-3 px-8 rounded-xl hover:bg-cocoa-dark hover:text-white transition duration-300">
-                        View Full Collection
-                    </a>
-                </div>
-            </div>
-        </section>
-
-        <!-- 4. Contact/Newsletter CTA Section -->
-        <section id="contact" class="py-16 md:py-24 bg-cocoa-dark/95">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center max-w-2xl">
-                <h2 class="text-4xl font-bold text-cream mb-4">
-                    Stay Connected
-                </h2>
-                <p class="text-cream/90 text-lg mb-8">
-                    Subscribe to our newsletter for exclusive discounts, new flavor announcements, and updates from the cocoa farm.
-                </p>
-
-                <!-- Simple Email Form -->
-                <form onsubmit="event.preventDefault(); document.getElementById('newsletter-message').classList.remove('hidden'); this.reset();" class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <input type="email" placeholder="Enter your email address" required 
-                           class="w-full sm:w-2/3 p-4 rounded-xl text-cocoa-dark focus:ring-accent focus:border-accent border-gray-300 transition duration-300" />
-                    <button type="submit" 
-                            class="w-full sm:w-1/3 bg-accent text-cocoa-dark font-bold py-4 rounded-xl shadow-lg hover:bg-yellow-700 transition duration-300">
-                        Subscribe
-                    </button>
-                </form>
-                <p id="newsletter-message" class="text-green-300 mt-4 hidden">Thank you for subscribing! Check your inbox for a welcome treat.</p>
             </div>
         </section>
 
     </main>
+    <!-- === END DEDICATED POLICY VIEWS === -->
+
 
     <!-- Footer -->
-    <footer class="bg-cocoa-dark text-cream pt-12 pb-6">
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 md:grid-cols-4 gap-8 border-b border-cocoa-light/50 pb-8">
+    <footer class="bg-primary-dark text-white pt-12 pb-6">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 md:grid-cols-4 gap-8 border-b border-gray-700 pb-8">
             
             <!-- Column 1: Brand Info -->
             <div>
-                <h4 class="text-xl font-bold mb-4 text-accent">Velvet Cocoa</h4>
-                <p class="text-sm text-cocoa-light leading-relaxed">
-                    Artisan chocolate, ethically sourced and crafted by hand since 2024. Pure taste, pure passion.
+                <h4 class="text-xl font-bold mb-4 text-accent">CoCo Crust</h4>
+                <p class="text-sm text-gray-400 leading-relaxed">
+                    Handcrafted bean-to-bar chocolate, ethically sourced and made with passion in Dhaka.
+                </p>
+                <p class="text-xs mt-4 text-gray-500">
+                    User ID: <span class="text-gray-300">${userId}</span>
                 </p>
             </div>
 
-            <!-- Column 2: Quick Links -->
+            <!-- Column 2: Indulge -->
             <div>
-                <h4 class="text-lg font-semibold mb-4">Quick Links</h4>
+                <h4 class="text-lg font-semibold mb-4">Indulge</h4>
                 <ul class="space-y-2 text-sm">
-                    <li><a href="#shop" class="hover:text-accent transition duration-300">Shop All Bars</a></li>
-                    <li><a href="#story" class="hover:text-accent transition duration-300">Our Mission</a></li>
-                    <li><a href="#" class="hover:text-accent transition duration-300">FAQs</a></li>
-                    <li><a href="#" class="hover:text-accent transition duration-300">Shipping & Returns</a></li>
+                    <li><a href="#shop" data-link-type="category" data-target="all" class="hover:text-accent transition duration-300">New Arrivals</a></li>
+                    <li><a href="#shop" data-link-type="category" data-target="truffles" class="hover:text-accent transition duration-300">Gifts & Hampers</a></li>
+                    <li><a href="#" class="hover:text-accent transition duration-300">Seasonal Specials</a></li>
+                    <li><a href="#" class="hover:text-accent transition duration-300">Subscriptions</a></li>
                 </ul>
             </div>
 
-            <!-- Column 3: Contact -->
+            <!-- Column 3: Policy -->
             <div>
-                <h4 class="text-lg font-semibold mb-4">Get in Touch</h4>
+                <h4 class="text-lg font-semibold mb-4">Help & Policy</h4>
                 <ul class="space-y-2 text-sm">
-                    <li><a href="mailto:info@velvetcocoa.com" class="hover:text-accent transition duration-300">info@velvetcocoa.com</a></li>
-                    <li>(555) 123-4567</li>
-                    <li>123 Cocoa Lane, Sweet City</li>
+                    <li><a href="#" data-link-type="policy" data-target="policy-faqs" class="hover:text-accent transition duration-300">FAQs</a></li>
+                    <li><a href="#" data-link-type="policy" data-target="policy-shipping" class="hover:text-accent transition duration-300">Shipping & Guarantee</a></li>
+                    <li><a href="#contact-support" data-link-type="main" data-target="main-scroll-view" class="hover:text-accent transition duration-300">Contact Us</a></li>
+                    <li><a href="#" class="hover:text-accent transition duration-300">Privacy Policy</a></li>
                 </ul>
             </div>
             
-            <!-- Column 4: Social Media (Placeholder) -->
+            <!-- Column 4: Social Media -->
             <div>
-                <h4 class="text-lg font-semibold mb-4">Follow Us</h4>
+                <h4 class="text-lg font-semibold mb-4">Follow The Craft</h4>
                 <div class="flex space-x-4">
-                    <a href="https://www.instagram.com/yourhandle" target="_blank" class="text-cocoa-light hover:text-accent transition duration-300">
+                    <!-- Instagram Icon -->
+                    <a href="#" target="_blank" class="text-gray-400 hover:text-accent transition duration-300">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
                     </a>
-                    <a href="https://www.facebook.com/yourhandle" target="_blank" class="text-cocoa-light hover:text-accent transition duration-300">
-                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M14 11h-2v3h2v-3zm0-5h-2v1h2V6zm4 0h-2v1h2V6zm-8 4H8v1h2v-1z"/><path d="M22 6v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2zm-4 1H6v10h12V7z"/></svg>
+                    
+                    <!-- Facebook Icon -->
+                    <a href="#" target="_blank" class="text-gray-400 hover:text-accent transition duration-300">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                        </svg>
                     </a>
-                    <a href="https://www.twitter.com/yourhandle" target="_blank" class="text-cocoa-light hover:text-accent transition duration-300">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5 5 11 8 10c-3-.5-4.5-2-4.5-4s1.2-2.3 2-2.7c2.3 2.8 5 4.9 10 5.4 0-.4.1-2.1 0-3.2 2-.5 4-1.2 5-2"/></svg>
+                    
+                    <!-- Pinterest Icon -->
+                    <a href="#" target="_blank" class="text-gray-400 hover:text-accent transition duration-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-3.1 0-6 2.5-6 6 0 2.2 1.4 4.1 3.5 4.8-.3 1.1-1.3 4.2-.8 6.4 1.2.3 2.9-1.2 3.3-2.1.8.2 1.6.3 2.5.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"></path></svg>
                     </a>
                 </div>
             </div>
@@ -613,8 +912,8 @@
         </div>
         
         <!-- Copyright -->
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8 mt-6 text-center text-xs text-cocoa-light">
-            &copy; 2024 Velvet Cocoa Co. All rights reserved. | <a href="#" class="hover:text-accent transition duration-300">Privacy Policy</a>
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 mt-6 text-center text-xs text-gray-500">
+            &copy; 2024 CoCo Crust. All rights reserved. | <a href="#" class="hover:text-accent transition duration-300">Terms & Conditions</a>
         </div>
     </footer>
 
